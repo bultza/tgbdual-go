@@ -402,6 +402,14 @@ void gb::run()
 				m_cpu->exec(80); // state=2
 				regs.STAT|=3;
 				update_stat_irq(); /* mode 3: usually drops STAT line */
+				// Scanline renderer: do not apply late scroll writes retroactively.
+				const byte line_scx = regs.SCX, line_scy = regs.SCY;
+				auto render_line = [&]() {
+					const byte next_scx = regs.SCX, next_scy = regs.SCY;
+					regs.SCX = line_scx; regs.SCY = line_scy;
+					m_lcd->render(vframe, regs.LY);
+					regs.SCX = next_scx; regs.SCY = next_scy;
+				};
 				m_cpu->exec(169); // state=3
 
 				if (m_cpu->dma_executing){ // HBlank DMA
@@ -438,7 +446,7 @@ void gb::run()
 
 					if (now_frame>=skip){
 						if (!track_bgp||!m_lcd->end_mode3(vframe,regs.LY))
-							m_lcd->render(vframe,regs.LY);
+							render_line();
 					}
 					else if (track_bgp)
 						m_lcd->end_mode3(NULL,regs.LY);
@@ -472,7 +480,7 @@ void gb::run()
 */						regs.STAT&=0xfc;
 						if (now_frame>=skip){
 							if (!track_bgp||!m_lcd->end_mode3(vframe,regs.LY))
-								m_lcd->render(vframe,regs.LY);
+								render_line();
 						}
 						else if (track_bgp)
 							m_lcd->end_mode3(NULL,regs.LY);
